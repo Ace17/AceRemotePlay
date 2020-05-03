@@ -1,0 +1,60 @@
+#!/bin/bash
+set -euo pipefail
+
+readonly scriptDir=$(dirname $0)
+
+readonly tmpDir=/tmp/deliver-$$
+trap "rm -rf $tmpDir" EXIT
+mkdir -p $tmpDir
+
+NAME=AcePlayer
+
+function main
+{
+  echo "Delivering [$NAME]"
+  deliverBinaryVersion
+}
+
+function deliverBinaryVersion
+{
+  local N=$NAME
+
+  echo "-------------------------------------"
+  echo "Building binaries"
+
+  # Windows binaries
+  BIN_WIN=$tmpDir/bin/w64
+  BIN=$BIN_WIN \
+    ./scripts/w64-make -j`nproc` $BIN_WIN/aceplayer.exe >/dev/null
+
+  gccVersion=$(x86_64-w64-mingw32-g++ -dumpversion)
+
+  mkdir $tmpDir/$N
+  cp $tmpDir/bin/w64/aceplayer.exe                                   $tmpDir/$N
+  cp /usr/x86_64-w64-mingw32/lib/libwinpthread-1.dll                 $tmpDir/$N
+  cp /usr/lib/gcc/x86_64-w64-mingw32/$gccVersion/libstdc++-6.dll     $tmpDir/$N
+  cp /usr/lib/gcc/x86_64-w64-mingw32/$gccVersion/libgcc_s_seh-1.dll  $tmpDir/$N
+  cp /opt/envs/win64/bin/SDL2.dll                                    $tmpDir/$N
+
+  # GNU/Linux binaries
+  BIN=$tmpDir/bin/gnu \
+    make -j`nproc` >/dev/null
+
+  cp -a $tmpDir/bin/gnu/aceplayer.exe                                $tmpDir/$N/aceplayer.x86_64
+
+  # Strip executables
+  strip -s $tmpDir/$N/*.{exe,dll,x86_64}
+
+  # Compress executables
+  upx $tmpDir/$N/*.{exe,x86_64}
+
+  (
+    cd $tmpDir
+    zip -q $N.zip -r $N
+  )
+
+  cp $tmpDir/$N.zip /tmp/
+  du -hs /tmp/$N.zip
+}
+
+main
