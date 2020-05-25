@@ -89,8 +89,8 @@ int Socket::recv(Address& sender, void* packet_data, int max_packet_size)
     sender.port = ntohs(from.sin_port);
   }
 
-  if(bytes == -1 && (errno == EAGAIN || errno == EWOULDBLOCK))
-    bytes = 0;
+  if(bytes == SOCKET_ERROR && WSAGetLastError() == WSAEWOULDBLOCK)
+    return 0; // no data available
 
   return bytes;
 }
